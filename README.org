@@ -1,0 +1,191 @@
+#+TITLE: ms-oauth - Microsoft OAuth2 Library for Emacs
+#+AUTHOR: Ian FitzPatrick
+#+EMAIL: ian@ianfitzpatrick.eu
+
+* Overview
+
+=ms-oauth= is a configurable Microsoft OAuth2 PKCE (Proof Key for Code Exchange) library for Emacs. It provides secure authentication for Microsoft Graph API and other Microsoft services with support for multiple configurations and automatic token management.
+
+* Features
+
+- OAuth2 PKCE flow implementation
+- Configurable for multiple projects/applications
+- Secure token storage with GPG encryption
+- Automatic token refresh
+- Support for Microsoft Graph API scopes
+- Non-blocking authentication flow
+- Comprehensive error handling
+
+* Installation
+
+** Manual Installation
+
+1. Clone this repository:
+   #+begin_src bash
+   git clone https://github.com/ifitzpat/ms-oauth.git
+   #+end_src
+
+2. Add to your Emacs load path:
+   #+begin_src emacs-lisp
+   (add-to-list 'load-path "/path/to/ms-oauth")
+   (require 'ms-oauth)
+   #+end_src
+
+** Dependencies
+
+- =emacs= >= 27.1
+- =request= >= 0.3.3  
+- =web-server= >= 0.1.2
+- =plstore= (built-in)
+
+* Quick Start
+
+** 1. Create Configuration
+
+#+begin_src emacs-lisp
+(setq my-outlook-config 
+      (ms-oauth-create-config
+       :client-id "your-azure-app-client-id"
+       :tenant-id "organizations"  ; or your specific tenant ID
+       :resource-url "https://graph.microsoft.com/Calendars.ReadWrite"
+       :token-cache-file "~/.cache/my-outlook-tokens.plist"
+       :gpg-recipient "your-email@example.com"))
+#+end_src
+
+** 2. Authenticate
+
+#+begin_src emacs-lisp
+(ms-oauth-authenticate my-outlook-config)
+#+end_src
+
+** 3. Get Bearer Token for API Calls
+
+#+begin_src emacs-lisp
+(setq bearer-token (ms-oauth-get-bearer-token my-outlook-config))
+
+;; Use in HTTP requests
+(request "https://graph.microsoft.com/v1.0/me/calendar/events"
+  :headers `(("Authorization" . ,(concat "Bearer " bearer-token)))
+  :parser 'json-read
+  :success (lambda (&key data &allow-other-keys)
+             (message "Events: %S" data)))
+#+end_src
+
+* Configuration
+
+** Required Parameters
+
+- =:client-id= - Azure app registration client ID
+- =:resource-url= - OAuth scope/resource URL (e.g., =https://graph.microsoft.com/Calendars.ReadWrite=)  
+- =:token-cache-file= - Path to encrypted token cache file
+- =:gpg-recipient= - GPG key email for token encryption
+
+** Optional Parameters
+
+- =:client-secret= - Azure app registration client secret (optional for PKCE)
+- =:tenant-id= - Azure tenant ID (defaults to ="organizations"=)
+- =:redirect-uri= - OAuth redirect URI (defaults to ="http://localhost:9004"=)
+- =:server-port= - Local server port for OAuth callback (defaults to =9004=)
+
+** Example Configurations
+
+*** Calendar Access
+#+begin_src emacs-lisp
+(setq calendar-config
+      (ms-oauth-create-config
+       :client-id "your-client-id"
+       :resource-url "https://graph.microsoft.com/Calendars.ReadWrite"
+       :token-cache-file "~/.cache/calendar-tokens.plist" 
+       :gpg-recipient "user@example.com"))
+#+end_src
+
+*** OneDrive Access
+#+begin_src emacs-lisp
+(setq onedrive-config
+      (ms-oauth-create-config
+       :client-id "your-client-id"
+       :resource-url "https://graph.microsoft.com/Files.ReadWrite"
+       :token-cache-file "~/.cache/onedrive-tokens.plist"
+       :gpg-recipient "user@example.com"))
+#+end_src
+
+*** Teams Integration
+#+begin_src emacs-lisp
+(setq teams-config
+      (ms-oauth-create-config
+       :client-id "your-client-id"
+       :resource-url "https://graph.microsoft.com/Team.ReadBasic.All"
+       :token-cache-file "~/.cache/teams-tokens.plist"
+       :gpg-recipient "user@example.com"))
+#+end_src
+
+* API Reference
+
+** Configuration Functions
+
+- =(ms-oauth-create-config &rest args)= - Create new OAuth configuration
+- =(ms-oauth-validate-config config)= - Validate configuration
+
+** Authentication Functions  
+
+- =(ms-oauth-authenticate config)= - Main authentication entry point
+- =(ms-oauth-get-bearer-token config)= - Get valid bearer token (auto-refresh)
+
+** Token Management
+
+- =(ms-oauth-tokens-valid-p config)= - Check if tokens are valid
+- =(ms-oauth-refresh-tokens config)= - Force token refresh  
+- =(ms-oauth-clear-tokens config)= - Clear stored tokens
+- =(ms-oauth-revoke-tokens config)= - Revoke and clear tokens
+
+* Azure App Registration
+
+To use this library, you need to register an application in Azure:
+
+1. Go to [[https://portal.azure.com][Azure Portal]]
+2. Navigate to "Azure Active Directory" > "App registrations"  
+3. Click "New registration"
+4. Set redirect URI to =http://localhost:9004= (or your configured port)
+5. Enable "Allow public client flows" for PKCE
+6. Add required API permissions (e.g., Microsoft Graph scopes)
+7. Copy the "Application (client) ID"
+
+* Security Notes
+
+- Tokens are encrypted using GPG with your specified recipient
+- PKCE flow provides additional security without requiring client secrets
+- Token cache files should be kept secure and not shared
+- Regular token rotation is handled automatically
+
+* Troubleshooting
+
+** Authentication Issues
+- Ensure Azure app registration allows public client flows
+- Check that redirect URI matches configuration (default: =http://localhost:9004=)
+- Verify GPG key is properly configured
+
+** Token Issues  
+- Check if tokens have expired: =(ms-oauth-tokens-valid-p config)=
+- Force refresh: =(ms-oauth-refresh-tokens config)=
+- Clear and re-authenticate: =(ms-oauth-clear-tokens config)=
+
+** Network Issues
+- Ensure port 9004 (or configured port) is available
+- Check firewall settings for localhost connections
+
+* Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality  
+4. Submit a pull request
+
+* License
+
+GPL v3 - See LICENSE file for details.
+
+* Related Projects
+
+- [[https://github.com/ifitzpat/org-outlook][org-outlook]] - Outlook calendar integration for org-mode (uses ms-oauth)
