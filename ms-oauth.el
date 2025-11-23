@@ -265,7 +265,7 @@ SECRET is the encrypted token data."
   "Process OAuth callback for CONFIG and signal completion."
   (with-slots (process headers) request
     (ws-response-header process 200 '("Content-type" . "text/html"))
-    (let ((auth-code (cdr (assoc "code" (funcall headers request))))
+    (let ((auth-code (cdr (assoc "code" (headers request))))
           (config-key (ms-oauth-config-client-id config)))
       (if auth-code
           (progn
