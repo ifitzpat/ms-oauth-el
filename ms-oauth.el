@@ -36,7 +36,7 @@
 ;; 1. Create a configuration:
 ;;    (setq my-config (ms-oauth-create-config
 ;;                     :client-id "your-client-id"
-;;                     :tenant-id "organizations" 
+;;                     :tenant-id "organizations"
 ;;                     :resource-url "https://graph.microsoft.com/Calendars.ReadWrite"
 ;;                     :token-cache-file "~/.cache/my-tokens.plist"
 ;;                     :gpg-recipient "user@example.com"))
@@ -54,6 +54,7 @@
 (require 'plstore)
 (require 'url-util)
 (require 'cl-lib)
+(require 'parse-time)
 
 ;;; Configuration Structure
 
@@ -93,7 +94,7 @@ Slots:
 
 Required parameters:
 - :client-id - Azure app registration client ID
-- :resource-url - OAuth scope/resource URL  
+- :resource-url - OAuth scope/resource URL
 - :token-cache-file - Path to encrypted token cache
 - :gpg-recipient - GPG key for token encryption
 
@@ -121,7 +122,7 @@ Example:
          (token-url (format "https://login.microsoftonline.com/%s/oauth2/v2.0/token" tenant-id))
          (code-verifier (ms-oauth--generate-random-string 43))
          (code-challenge (base64url-encode-string (secure-hash 'sha256 code-verifier nil nil t))))
-    
+
     ;; Validate required parameters
     (unless client-id
       (error "ms-oauth: client-id is required"))
@@ -131,7 +132,7 @@ Example:
       (error "ms-oauth: token-cache-file is required"))
     (unless gpg-recipient
       (error "ms-oauth: gpg-recipient is required"))
-    
+
     ;; Create and return configuration
     (ms-oauth--make-config
      :client-id client-id
@@ -152,7 +153,7 @@ Example:
 Returns t if valid, raises error if invalid."
   (unless (ms-oauth-config-p config)
     (error "ms-oauth: Invalid configuration object"))
-  
+
   (let ((required-fields '((client-id . "client-id")
                            (resource-url . "resource-url")
                            (token-cache-file . "token-cache-file")
@@ -186,7 +187,7 @@ Returns t if valid, raises error if invalid."
   (condition-case err
       (ms-oauth-validate-config config)
     (error
-     (signal 'ms-oauth-config-error 
+     (signal 'ms-oauth-config-error
              (list (format "Invalid configuration for %s: %s" operation (error-message-string err)))))))
 
 ;;; Token Management
@@ -209,8 +210,8 @@ TOKEN-TYPE should be 'access' or 'refresh'."
          (auth-timestamp (plist-get (cdr (plstore-get cache cache-key)) :timestamp)))
     (plstore-close cache)
     (if auth-timestamp
-        (time-less-p (time-add (parse-iso8601-time-string auth-timestamp) 
-                               (seconds-to-time 3599))  
+        (time-less-p (time-add (parse-iso8601-time-string auth-timestamp)
+                               (seconds-to-time 3599))
                      (current-time))
       nil)))
 
@@ -318,12 +319,14 @@ Returns the authorization code on success."
                                 (when server
                                   (ws-stop server)))
                               (remhash config-key ms-oauth--auth-servers)
-                              (signal 'ms-oauth-auth-error 
+                              (signal 'ms-oauth-auth-error
                                       '("OAuth authorization timed out after 5 minutes")))))
              ms-oauth--auth-timers)
 
     ;; Open browser (non-blocking)
-    (browse-url-xdg-open auth-url)
+    (if (eq system-type 'gnu/linux)
+	(browse-url-xdg-open outlook-auth-url)
+        (browse-url outlook-auth-url))
     (message "Please complete authentication in your browser (you have 5 minutes)...")
 
     ;; Wait for completion with non-blocking checks
@@ -350,7 +353,7 @@ Returns the authorization code on success."
          (auth-code (or refresh-token
                         (progn
                           (ms-oauth--request-authorization config)))))
-    
+
     (condition-case err
         (request (ms-oauth-config-token-url config)
           :type "POST"
@@ -370,18 +373,18 @@ Returns the authorization code on success."
           :success (cl-function
                     (lambda (&key data &allow-other-keys)
                       (when data
-                        (ms-oauth--set-token-field config "access" 
-                                                   `(:timestamp ,(format-time-string "%Y-%m-%dT%H:%M:%S" (current-time))) 
+                        (ms-oauth--set-token-field config "access"
+                                                   `(:timestamp ,(format-time-string "%Y-%m-%dT%H:%M:%S" (current-time)))
                                                    `(:access ,(assoc-default 'access_token data)))
-                        (ms-oauth--set-token-field config "refresh" 
-                                                   `(:timestamp ,(format-time-string "%Y-%m-%dT%H:%M:%S" (current-time))) 
+                        (ms-oauth--set-token-field config "refresh"
+                                                   `(:timestamp ,(format-time-string "%Y-%m-%dT%H:%M:%S" (current-time)))
                                                    `(:refresh ,(assoc-default 'refresh_token data))))))
           :error (cl-function
                   (lambda (&rest args &key error-thrown &allow-other-keys)
-                    (signal 'ms-oauth-token-error 
+                    (signal 'ms-oauth-token-error
                             (list (format "Error getting access token: %S" error-thrown))))))
       (error
-       (signal 'ms-oauth-token-error 
+       (signal 'ms-oauth-token-error
                (list (format "Failed to request access token: %s" (error-message-string err))))))))
 
 ;;; Public API Functions
